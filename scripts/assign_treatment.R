@@ -24,6 +24,6 @@ generate_assignments <- function(start_id, n, week) {
 }
 
 #create week 1 assignments
-generate_assignments(start_id = 1, n = 50, week = 1)
+generate_assignments(start_id = 1, n = 81, week = 1)
 
 
