@@ -9,13 +9,13 @@ class EvictionNet(nn.Module):
     Neural network to predict eviction case outcomes.
     
     Architecture:
-    - Input: 4 features (filing-date characteristics)
-    - Hidden layer 1: 16 neurons + ReLU activation
-    - Hidden layer 2: 8 neurons + ReLU activation
+    - Input: 85 features (amount_owed, plaintiff_rep, + 83 zip dummies)
+    - Hidden layer 1: 32 neurons + ReLU activation
+    - Hidden layer 2: 16 neurons + ReLU activation
     - Output: 1 neuron + Sigmoid (binary classification)
     """
     
-    def __init__(self, input_size=4, hidden_size_1=16, hidden_size_2=8):
+    def __init__(self, input_size=85, hidden_size_1=32, hidden_size_2=16):
         super(EvictionNet, self).__init__()
         
         # define layers
@@ -58,14 +58,14 @@ target_columns = [
     'defendant_appearance',
     'hearing_held',
     'defendant_hearing_attendance',
-    'tenant_rep_merged',
+    'defendant_rep_merged',
     'writ_final',
     'dismissal_final',
     'old_final',
     'court_displacement',
 ]
 
-models = {col: EvictionNet() for col in target_columns}
+models = {col: EvictionNet(input_size=85) for col in target_columns}
 
 print("=== neural network models created ===\n")
 
@@ -84,10 +84,10 @@ print(f"total parameters across {len(models)} models: {total_params * len(models
 
 # test forward pass with dummy data
 print("testing forward pass with dummy data:")
-dummy_input = torch.randn(5, 4)  # batch of 5 samples, 4 features
+dummy_input = torch.randn(5, 85)  # batch of 5 samples, 85 features
 dummy_output = models['defendant_appearance'](dummy_input)
 
-print(f"input shape: {dummy_input.shape}  (batch_size=5, features=4)")
+print(f"input shape: {dummy_input.shape}  (batch_size=5, features=85)")
 print(f"output shape: {dummy_output.shape}  (batch_size=5, predictions=1)")
 print(f"sample predictions (probabilities): {dummy_output.squeeze()}\n")
 
