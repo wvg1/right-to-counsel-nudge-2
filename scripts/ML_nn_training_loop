@@ -1,0 +1,158 @@
+import torch
+import torch.nn as nn
+import numpy as np
+import os
+
+### training configuration ###
+
+num_epochs = 100
+patience = 10  # early stopping patience
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"using device: {device}\n")
+
+# move models to device
+for col in target_columns:
+    models[col] = models[col].to(device)
+
+# create models directory if it doesn't exist
+os.makedirs("models", exist_ok=True)
+
+### training function ###
+
+def train_epoch(model, optimizer, train_loader, criterion, device, target_idx):
+    """Train for one epoch and return average loss."""
+    model.train()
+    total_loss = 0.0
+    num_batches = 0
+    
+    for batch_data in train_loader:
+        X_batch = batch_data[0].to(device)
+        y_batch = batch_data[target_idx + 1].to(device)
+        
+        # forward pass
+        predictions = model(X_batch)
+        loss = criterion(predictions, y_batch)
+        
+        # backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        total_loss += loss.item()
+        num_batches += 1
+    
+    return total_loss / num_batches
+
+### validation function ###
+
+def validate(model, val_loader, criterion, device, target_idx):
+    """Evaluate model on validation set and return average loss."""
+    model.eval()
+    total_loss = 0.0
+    num_batches = 0
+    
+    with torch.no_grad():
+        for batch_data in val_loader:
+            X_batch = batch_data[0].to(device)
+            y_batch = batch_data[target_idx + 1].to(device)
+            
+            predictions = model(X_batch)
+            loss = criterion(predictions, y_batch)
+            
+            total_loss += loss.item()
+            num_batches += 1
+    
+    return total_loss / num_batches
+
+### train all models ###
+
+training_history = {col: {'train_loss': [], 'val_loss': []} for col in target_columns}
+
+for target_idx, target_col in enumerate(target_columns):
+    model = models[target_col]
+    optimizer = optimizers[target_col]
+    
+    print(f"\n{'='*60}")
+    print(f"training model: {target_col}")
+    print(f"{'='*60}\n")
+    
+    best_val_loss = float('inf')
+    patience_counter = 0
+    
+    for epoch in range(num_epochs):
+        # train and validate
+        train_loss = train_epoch(model, optimizer, train_loader, criterion, device, target_idx)
+        val_loss = validate(model, val_loader, criterion, device, target_idx)
+        
+        training_history[target_col]['train_loss'].append(train_loss)
+        training_history[target_col]['val_loss'].append(val_loss)
+        
+        # print progress every 10 epochs
+        if (epoch + 1) % 10 == 0:
+            print(f"epoch {epoch+1:3d}  |  train_loss: {train_loss:.4f}  |  val_loss: {val_loss:.4f}")
+        
+        # early stopping check
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            patience_counter = 0
+            # save best model
+            torch.save(model.state_dict(), f"models/{target_col}_best.pt")
+        else:
+            patience_counter += 1
+            if patience_counter >= patience:
+                print(f"\nearly stopping at epoch {epoch+1} (best val_loss: {best_val_loss:.4f})")
+                break
+    
+    print(f"training complete. best val_loss: {best_val_loss:.4f}\n")
+
+### evaluate on test set ###
+
+def test_model(model, test_loader, criterion, device, target_idx):
+    """Evaluate model on test set and return loss and predictions."""
+    model.eval()
+    total_loss = 0.0
+    num_batches = 0
+    all_predictions = []
+    all_targets = []
+    
+    with torch.no_grad():
+        for batch_data in test_loader:
+            X_batch = batch_data[0].to(device)
+            y_batch = batch_data[target_idx + 1].to(device)
+            
+            predictions = model(X_batch)
+            loss = criterion(predictions, y_batch)
+            
+            total_loss += loss.item()
+            num_batches += 1
+            
+            all_predictions.append(predictions.cpu().numpy())
+            all_targets.append(y_batch.cpu().numpy())
+    
+    avg_loss = total_loss / num_batches
+    predictions = np.concatenate(all_predictions, axis=0)
+    targets = np.concatenate(all_targets, axis=0)
+    
+    return avg_loss, predictions, targets
+
+print(f"\n{'='*60}")
+print("evaluating on test set")
+print(f"{'='*60}\n")
+
+test_results = {}
+
+for target_idx, target_col in enumerate(target_columns):
+    model = models[target_col]
+    
+    # load best model
+    model.load_state_dict(torch.load(f"models/{target_col}_best.pt"))
+    
+    test_loss, predictions, targets = test_model(model, test_loader, criterion, device, target_idx)
+    test_results[target_col] = {
+        'test_loss': test_loss,
+        'predictions': predictions,
+        'targets': targets
+    }
+    
+    print(f"{target_col:30s}  |  test_loss: {test_loss:.4f}")

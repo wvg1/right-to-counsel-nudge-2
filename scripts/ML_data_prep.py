@@ -8,49 +8,53 @@ from sklearn.preprocessing import StandardScaler
 ### load data ###
 df = pd.read_excel("data/baseline_data_11_26_25.xlsx")
 
-### select features ###
+### select features (filing-date only) ###
 feature_columns = [
-    'plaintiff_rep',                  #binary: plaintiff has attorney
+    'pocket_service',                 #binary: served via pocket service
     'amount_owed',                    #numeric: dollars owed at filing
+    'CBG',                            #numeric: census block group
+    'plaintiff_rep',                  #binary: plaintiff has attorney
+]
+
+# target variables (predict separately)
+target_columns = [
     'defendant_appearance',           #binary: defendant appeared before first hearing
     'hearing_held',                   #binary: hearing occurred
     'defendant_hearing_attendance',   #binary: defendant at hearing
     'tenant_rep_merged',              #binary: tenant has representation
-]
-
-#target variables (predict separately)
-target_columns = [
-    'court_displacement',             #binary: court documents indicate the tenant moved
     'writ_final',                     #binary: writ was issued and ultimately not vacated
+    'dismissal_final',                #binary: case was dismissed and ultimately not reinstated
     'old_final',                      #binary: record protection order was issued and ultimately not vacated
+    'court_displacement',             #binary: court documents indicate the tenant moved
 ]
 
-#extract features and targets
+# extract features and targets
 X = df[feature_columns].copy()
-y_court_disp = df['court_displacement'].copy()
-y_writ = df['writ_final'].copy()
-y_old = df['old_final'].copy()
+y_dict = {col: df[col].copy() for col in target_columns}
 
 print(f"feature matrix shape: {X.shape}")
-print(f"court displacement target: {y_court_disp.shape}")
-print(f"writ final target: {y_writ.shape}")
-print(f"OLD final target: {y_old.shape}\n")
+for col in target_columns:
+    print(f"{col}: {y_dict[col].shape}")
+print()
 
 ### clean data ###
-#drop rows with any missing values
-valid_idx = X.notna().all(axis=1) & y_court_disp.notna() & y_writ.notna() & y_old.notna()
+# drop rows with any missing values in features
+valid_idx = X.notna().all(axis=1)
+
+# also require valid targets
+for col in target_columns:
+    valid_idx = valid_idx & y_dict[col].notna()
+
 X = X[valid_idx]
-y_court_disp = y_court_disp[valid_idx]
-y_writ = y_writ[valid_idx]
-y_old = y_old[valid_idx]
+for col in target_columns:
+    y_dict[col] = y_dict[col][valid_idx]
 
 print(f"After removing missing values: {X.shape[0]} cases\n")
 
-#convert boolean columns to float
+# convert to float
 X = X.astype(float)
-y_court_disp = y_court_disp.astype(float)
-y_writ = y_writ.astype(float)
-y_old = y_old.astype(float)
+for col in target_columns:
+    y_dict[col] = y_dict[col].astype(float)
 
 ### standardize features ###
 scaler = StandardScaler()
@@ -60,39 +64,68 @@ print(f"feature statistics after standardization:")
 print(f"  mean: {X_scaled.mean(axis=0).round(3)}")
 print(f"  std:  {X_scaled.std(axis=0).round(3)}\n")
 
-### train/test split ###
+### train/test/validate split (60/20/20) ###
 
-#80/20 split
-X_train, X_test, y_train_court, y_test_court, y_train_writ, y_test_writ, y_train_old, y_test_old = train_test_split(
-    X_scaled, y_court_disp, y_writ, y_old, test_size=0.2, random_state=42
+# first split: 80/20 (train+val / test)
+split_data = train_test_split(
+    X_scaled, 
+    *[y_dict[col] for col in target_columns],
+    test_size=0.2, 
+    random_state=42
 )
 
-print(f"train set: {X_train.shape[0]} cases")
-print(f"test set:  {X_test.shape[0]} cases\n")
+X_temp = split_data[0]
+X_test = split_data[1]
+y_temp_dict = {}
+y_test_dict = {}
+
+for i, col in enumerate(target_columns):
+    y_temp_dict[col] = split_data[2 + i*2]
+    y_test_dict[col] = split_data[2 + i*2 + 1]
+
+# second split: 75/25 of temp (60/20 of original)
+split_data2 = train_test_split(
+    X_temp,
+    *[y_temp_dict[col] for col in target_columns],
+    test_size=0.25,
+    random_state=42
+)
+
+X_train = split_data2[0]
+X_val = split_data2[1]
+y_train_dict = {}
+y_val_dict = {}
+
+for i, col in enumerate(target_columns):
+    y_train_dict[col] = split_data2[2 + i*2]
+    y_val_dict[col] = split_data2[2 + i*2 + 1]
+
+print(f"train set: {X_train.shape[0]} cases (60%)")
+print(f"val set:   {X_val.shape[0]} cases (20%)")
+print(f"test set:  {X_test.shape[0]} cases (20%)\n")
 
 ### convert to pytorch tensors ###
 X_train_tensor = torch.from_numpy(X_train).float()
+X_val_tensor = torch.from_numpy(X_val).float()
 X_test_tensor = torch.from_numpy(X_test).float()
 
-y_train_court_tensor = torch.from_numpy(y_train_court.values).float().unsqueeze(1)
-y_test_court_tensor = torch.from_numpy(y_test_court.values).float().unsqueeze(1)
+y_train_tensors = {}
+y_val_tensors = {}
+y_test_tensors = {}
 
-y_train_writ_tensor = torch.from_numpy(y_train_writ.values).float().unsqueeze(1)
-y_test_writ_tensor = torch.from_numpy(y_test_writ.values).float().unsqueeze(1)
+for col in target_columns:
+    y_train_tensors[col] = torch.from_numpy(y_train_dict[col].values).float().unsqueeze(1)
+    y_val_tensors[col] = torch.from_numpy(y_val_dict[col].values).float().unsqueeze(1)
+    y_test_tensors[col] = torch.from_numpy(y_test_dict[col].values).float().unsqueeze(1)
 
-y_train_old_tensor = torch.from_numpy(y_train_old.values).float().unsqueeze(1)
-y_test_old_tensor = torch.from_numpy(y_test_old.values).float().unsqueeze(1)
-
-print(f"tensor shapes:")
+# tensor shapes
 print(f"  X_train: {X_train_tensor.shape}  (cases, features)")
-print(f"  y_train (court_displacement): {y_train_court_tensor.shape}  (cases, 1)")
-print(f"  X_test:  {X_test_tensor.shape}   (cases, features)")
-print(f"  y_test (court_displacement):  {y_test_court_tensor.shape}   (cases, 1)\n")
+print(f"  X_val:   {X_val_tensor.shape}   (cases, features)")
+print(f"  X_test:  {X_test_tensor.shape}   (cases, features)\n")
 
 ### check outcome distribution ###
-print(f"outcome distribution in training set:")
-print(f"  court displacement: {int(y_train_court_tensor.sum().item())}/{len(y_train_court_tensor)} ({100*y_train_court_tensor.mean().item():.1f}%)")
-print(f"  writ final: {int(y_train_writ_tensor.sum().item())}/{len(y_train_writ_tensor)} ({100*y_train_writ_tensor.mean().item():.1f}%)")
-print(f"  old final: {int(y_train_old_tensor.sum().item())}/{len(y_train_old_tensor)} ({100*y_train_old_tensor.mean().item():.1f}%)\n")
-
-print("=== data preparation complete ===")
+for col in target_columns:
+    print(f"\n{col}:")
+    print(f"  train: {int(y_train_tensors[col].sum().item())}/{len(y_train_tensors[col])} ({100*y_train_tensors[col].mean().item():.1f}%)")
+    print(f"  val:   {int(y_val_tensors[col].sum().item())}/{len(y_val_tensors[col])} ({100*y_val_tensors[col].mean().item():.1f}%)")
+    print(f"  test:  {int(y_test_tensors[col].sum().item())}/{len(y_test_tensors[col])} ({100*y_test_tensors[col].mean().item():.1f}%)")
