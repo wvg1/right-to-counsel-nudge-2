@@ -8,11 +8,22 @@ from sklearn.preprocessing import StandardScaler
 ### load data ###
 df = pd.read_excel("data/baseline_data_11_26_25.xlsx")
 
-### select features (filing-date only) ###
-feature_columns = [
-    'pocket_service',                 #binary: served via pocket service
+print(f"initial dataset: {len(df)} cases\n")
+
+### filter to Pierce County only (valid CBGs start with 53053) ###
+df_pierce = df[df['census_block_group'].astype(str).str.startswith('53053')].copy()
+n_removed_cbg = len(df) - len(df_pierce)
+
+print(f"After filtering to Pierce County CBGs (53053):")
+print(f"  removed: {n_removed_cbg} cases")
+print(f"  remaining: {len(df_pierce)} cases\n")
+
+df = df_pierce
+
+### select features ###
+feature_columns = [ 
     'amount_owed',                    #numeric: dollars owed at filing
-    'CBG',                            #numeric: census block group
+    'address_zip',                    #categorical: geographic identifier
     'plaintiff_rep',                  #binary: plaintiff has attorney
 ]
 
@@ -51,24 +62,39 @@ for col in target_columns:
 
 print(f"After removing missing values: {X.shape[0]} cases\n")
 
-# convert to float
-X = X.astype(float)
+# one-hot encode address_zip
+X = pd.get_dummies(X, columns=['address_zip'], drop_first=True, dtype=float)
+
+# convert other columns to float
+X['amount_owed'] = X['amount_owed'].astype(float)
+X['plaintiff_rep'] = X['plaintiff_rep'].astype(float)
+
 for col in target_columns:
     y_dict[col] = y_dict[col].astype(float)
 
-### standardize features ###
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+print(f"feature matrix shape after one-hot encoding: {X.shape}")
+print(f"  {X.shape[1]} features total\n")
 
-print(f"feature statistics after standardization:")
-print(f"  mean: {X_scaled.mean(axis=0).round(3)}")
-print(f"  std:  {X_scaled.std(axis=0).round(3)}\n")
+### standardize numeric features only ###
+# identify which columns are one-hot encoded zips (they stay 0/1)
+numeric_cols = ['amount_owed', 'plaintiff_rep']
+zip_cols = [col for col in X.columns if col.startswith('address_zip_')]
+
+scaler = StandardScaler()
+X[numeric_cols] = scaler.fit_transform(X[numeric_cols])
+
+print(f"feature statistics after standardization (numeric features):")
+print(f"  amount_owed: mean={X['amount_owed'].mean():.3f}, std={X['amount_owed'].std():.3f}")
+print(f"  plaintiff_rep: mean={X['plaintiff_rep'].mean():.3f}, std={X['plaintiff_rep'].std():.3f}\n")
 
 ### train/test/validate split (60/20/20) ###
 
+# convert to numpy for splitting
+X_np = X.values
+
 # first split: 80/20 (train+val / test)
 split_data = train_test_split(
-    X_scaled, 
+    X_np, 
     *[y_dict[col] for col in target_columns],
     test_size=0.2, 
     random_state=42
@@ -118,14 +144,17 @@ for col in target_columns:
     y_val_tensors[col] = torch.from_numpy(y_val_dict[col].values).float().unsqueeze(1)
     y_test_tensors[col] = torch.from_numpy(y_test_dict[col].values).float().unsqueeze(1)
 
-# tensor shapes
+print(f"tensor shapes:")
 print(f"  X_train: {X_train_tensor.shape}  (cases, features)")
 print(f"  X_val:   {X_val_tensor.shape}   (cases, features)")
 print(f"  X_test:  {X_test_tensor.shape}   (cases, features)\n")
 
 ### check outcome distribution ###
 for col in target_columns:
-    print(f"\n{col}:")
+    print(f"{col}:")
     print(f"  train: {int(y_train_tensors[col].sum().item())}/{len(y_train_tensors[col])} ({100*y_train_tensors[col].mean().item():.1f}%)")
     print(f"  val:   {int(y_val_tensors[col].sum().item())}/{len(y_val_tensors[col])} ({100*y_val_tensors[col].mean().item():.1f}%)")
     print(f"  test:  {int(y_test_tensors[col].sum().item())}/{len(y_test_tensors[col])} ({100*y_test_tensors[col].mean().item():.1f}%)")
+    print()
+
+print("=== data preparation complete ===")
