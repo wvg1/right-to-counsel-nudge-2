@@ -11,14 +11,16 @@ df = pd.read_excel("data/baseline_data_11_26_25.xlsx")
 print(f"initial dataset: {len(df)} cases\n")
 
 ### filter to Pierce County only (valid CBGs start with 53053) ###
-df_pierce = df[df['census_block_group'].astype(str).str.startswith('53053')].copy()
-n_removed_cbg = len(df) - len(df_pierce)
+df = df[df['census_block_group'].astype(str).str.startswith('53053')].copy()
+n_removed_cbg = len(df) - len(df)
+print(f"After filtering to Pierce County CBGs (53053): {len(df)} cases\n")
 
-print(f"After filtering to Pierce County CBGs (53053):")
-print(f"  removed: {n_removed_cbg} cases")
-print(f"  remaining: {len(df_pierce)} cases\n")
+### filter to zips with Pierce County CBGs ###
+pierce_zips = df[df['census_block_group'].astype(str).str.startswith('53053')]['address_zip'].dropna().unique()
+df = df[df['address_zip'].isin(pierce_zips)].copy()
 
-df = df_pierce
+print(f"Valid Pierce County zips: {len(pierce_zips)}")
+print(f"Cases with valid zips: {len(df)}\n")
 
 ### select features ###
 feature_columns = [ 
@@ -32,7 +34,7 @@ target_columns = [
     'defendant_appearance',           #binary: defendant appeared before first hearing
     'hearing_held',                   #binary: hearing occurred
     'defendant_hearing_attendance',   #binary: defendant at hearing
-    'tenant_rep_merged',              #binary: tenant has representation
+    'defendant_rep_merged',              #binary: tenant has representation
     'writ_final',                     #binary: writ was issued and ultimately not vacated
     'dismissal_final',                #binary: case was dismissed and ultimately not reinstated
     'old_final',                      #binary: record protection order was issued and ultimately not vacated
@@ -156,5 +158,3 @@ for col in target_columns:
     print(f"  val:   {int(y_val_tensors[col].sum().item())}/{len(y_val_tensors[col])} ({100*y_val_tensors[col].mean().item():.1f}%)")
     print(f"  test:  {int(y_test_tensors[col].sum().item())}/{len(y_test_tensors[col])} ({100*y_test_tensors[col].mean().item():.1f}%)")
     print()
-
-print("=== data preparation complete ===")
