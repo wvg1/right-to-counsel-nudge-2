@@ -260,7 +260,7 @@ print(f"loss curves saved to 'results/'\n")
 ### evaluate on test set ###
 
 def test_model(model, test_loader, criterion, device, target_idx):
-    """Evaluate model on test set and return loss and predictions."""
+    """evaluate model on test set and return loss and predictions."""
     model.eval()
     total_loss = 0.0
     num_batches = 0
