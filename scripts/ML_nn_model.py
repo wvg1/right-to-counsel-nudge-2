@@ -91,6 +91,17 @@ print(f"input shape: {dummy_input.shape}  (batch_size=5, features=85)")
 print(f"output shape: {dummy_output.shape}  (batch_size=5, predictions=1)")
 print(f"sample predictions (probabilities): {dummy_output.squeeze()}\n")
 
+### load preprocessed tensors ###
+checkpoint = torch.load('data/tensors.pt')
+X_train_tensor = checkpoint['X_train']
+X_val_tensor = checkpoint['X_val']
+X_test_tensor = checkpoint['X_test']
+y_train_tensors = checkpoint['y_train']
+y_val_tensors = checkpoint['y_val']
+y_test_tensors = checkpoint['y_test']
+
+print(f"tensors loaded from 'data/tensors.pt'\n")
+
 ### create dataloaders ###
 
 # assuming tensors are loaded from data prep script

@@ -158,3 +158,16 @@ for col in target_columns:
     print(f"  val:   {int(y_val_tensors[col].sum().item())}/{len(y_val_tensors[col])} ({100*y_val_tensors[col].mean().item():.1f}%)")
     print(f"  test:  {int(y_test_tensors[col].sum().item())}/{len(y_test_tensors[col])} ({100*y_test_tensors[col].mean().item():.1f}%)")
     print()
+
+### save tensors for model training ###
+torch.save({
+    'X_train': X_train_tensor,
+    'X_val': X_val_tensor,
+    'X_test': X_test_tensor,
+    'y_train': y_train_tensors,
+    'y_val': y_val_tensors,
+    'y_test': y_test_tensors,
+    'target_columns': target_columns,
+}, 'data/tensors.pt')
+
+print(f"tensors saved to 'data/tensors.pt'\n")
