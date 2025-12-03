@@ -45,3 +45,6 @@ generate_assignments(start_id = 410, n = 53, week = 7)
 
 #create week 8 assignments
 generate_assignments(start_id = 463, n = 65, week = 8)
+
+#create week 9 assignments
+generate_assignments(start_id = 528, n = 30, week = 9)
