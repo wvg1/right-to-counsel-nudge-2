@@ -3,7 +3,7 @@ library(tidyverse)
 library(writexl)
 
 #set working directory as needed
-setwd("C:/Users/wvg1/Documents/right-to-counsel-nudge-2")
+setwd("C:/dev/right-to-counsel-nudge-2")
 
 #set seed for reproducibility
 set.seed(651)
@@ -66,3 +66,6 @@ generate_assignments(start_id = 849, n = 61, week = 14)
 
 #create week 15 assignments
 generate_assignments(start_id = 910, n = 119, week = 15)
+
+#create week 16 assignments
+generate_assignments(start_id = 1029, n = 70, week = 16)
