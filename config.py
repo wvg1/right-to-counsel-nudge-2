@@ -15,7 +15,7 @@ load_dotenv()
 # ============================================================================
 
 # base directory (project root)
-BASE_DIR = Path(__file__).parent.parent
+BASE_DIR = Path(__file__).parent
 
 # data directories
 DATA_DIR = BASE_DIR / "data"
