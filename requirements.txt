@@ -1,0 +1,21 @@
+# Core dependencies
+pandas>=2.0.0
+python-dotenv>=1.0.0
+
+# PDF processing
+pdfplumber>=0.10.0
+
+# Azure services
+azure-ai-vision-imageanalysis>=1.0.0
+openai>=1.0.0
+
+# Web scraping (for Phase 2)
+selenium>=4.15.0
+
+# Label generation (for Phase 4)
+reportlab>=4.0.0
+pillow>=10.0.0
+
+# Utilities
+requests>=2.31.0
+tqdm>=4.66.0
