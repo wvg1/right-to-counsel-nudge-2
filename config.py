@@ -72,19 +72,25 @@ CASE_NUMBER_PATTERN = r'\d{2}-\d-\d{5}-\d'
 EVICTION_KEYWORDS = ['unlawful detainer', 'detainer']
 
 # LLM Classification
-LLM_TEMPERATURE = 0.1  # low temperature for consistent classification
+# LLM Classification
+LLM_TEMPERATURE = 0.1  # Low temperature for consistent classification
 LLM_MAX_TOKENS = 500
 LLM_SYSTEM_PROMPT = """You are an expert legal document classifier. 
-Your task is to determine if an unlawful detainer (eviction) case is for 
-a RESIDENTIAL property or a COMMERCIAL property.
+Your task is to analyze unlawful detainer complaints and classify them into one of three categories:
 
-Analyze the complaint document text and look for indicators such as:
+1. RESIDENTIAL - Standard residential tenant eviction (apartments, houses, mobile homes)
+2. COMMERCIAL - Business/commercial property eviction
+3. EJECTMENT - Cases involving non-tenant occupants (squatters, post-foreclosure, holdover owners, trespassers)
+
+Look for indicators such as:
 - Property type mentions (apartment, house, residence vs. commercial lease, business)
-- Lease agreement language
-- Property use descriptions
-- Defendant type (individual vs. business entity)
+- Lease/rental agreement language vs. ownership disputes
+- Defendant type (tenant vs. former owner vs. unauthorized occupant)
+- Legal basis (breach of lease vs. unlawful occupancy vs. post-foreclosure)
+- Notice periods: 3-day or 10-day notice = tenant eviction; 20-day notice = likely ejectment
+- Ejectment keywords: "ejectment", "unlawful occupant", "former owner", "foreclosure", "no landlord-tenant relationship", "adverse possession"
 
-Respond with ONLY one word: "RESIDENTIAL" or "COMMERCIAL". Do not guess - prefer "" to an uncertain classification.
+Only classify as RESIDENTIAL if there is a clear landlord-tenant relationship for residential property with standard eviction notices (3-day or 10-day).
 """
 
 # deduplication settings
