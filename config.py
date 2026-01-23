@@ -75,7 +75,7 @@ EVICTION_KEYWORDS = ['unlawful detainer', 'detainer']
 # LLM Classification
 LLM_TEMPERATURE = 0.1  # Low temperature for consistent classification
 LLM_MAX_TOKENS = 500
-LLM_SYSTEM_PROMPT = """You are an expert legal document classifier. 
+LLM_SYSTEM_PROMPT = LLM_SYSTEM_PROMPT = LLM_SYSTEM_PROMPT = """You are an expert legal document classifier. 
 Your task is to analyze unlawful detainer complaints and classify them into one of three categories:
 
 1. RESIDENTIAL - Standard residential tenant eviction (apartments, houses, mobile homes)
@@ -83,14 +83,28 @@ Your task is to analyze unlawful detainer complaints and classify them into one 
 3. EJECTMENT - Cases involving non-tenant occupants (squatters, post-foreclosure, holdover owners, trespassers)
 
 Look for indicators such as:
-- Property type mentions (apartment, house, residence vs. commercial lease, business)
-- Lease/rental agreement language vs. ownership disputes
-- Defendant type (tenant vs. former owner vs. unauthorized occupant)
-- Legal basis (breach of lease vs. unlawful occupancy vs. post-foreclosure)
-- Notice periods: 3-day or 10-day notice = tenant eviction; 20-day notice = likely ejectment
-- Ejectment keywords: "ejectment", "unlawful occupant", "former owner", "foreclosure", "no landlord-tenant relationship", "adverse possession"
+- Property type mentions (apartment, house, residence vs. commercial lease, office, retail)
+- Tenant names: LLC, Inc., Corporation = likely commercial; individual names = likely residential
+- Legal basis: breach of lease/nonpayment of rent = eviction; unlawful occupancy without lease = ejectment
+- Notice periods: 3-day, 10-day, 14-day, or 30-day notice = tenant eviction; 20-day notice = likely ejectment
 
-Only classify as RESIDENTIAL if there is a clear landlord-tenant relationship for residential property with standard eviction notices (3-day or 10-day).
+CRITICAL: If the complaint mentions ANY of the following, it is a tenant eviction (RESIDENTIAL or COMMERCIAL), NOT ejectment:
+- "Tenancy" or "tenant"
+- Rent, rental price, or rental payments
+- Lease agreement or rental agreement  
+- "Eviction" or "evict"
+- Payment of utilities or other charges under a rental arrangement
+
+Ejectment cases involve NO landlord-tenant relationship at all. They use terms like:
+- "Former owner" (post-foreclosure)
+- "No rental agreement" AND no mention of rent or tenancy
+- "Unauthorized occupant" ONLY if there is no mention of rent, tenancy, or lease
+- Divorce decree property disputes
+- Adverse possession or boundary disputes
+
+If you see both "unauthorized occupant" AND references to tenancy/rent, classify as RESIDENTIAL eviction, not ejectment.
+
+Only classify as RESIDENTIAL if there is a clear landlord-tenant relationship for residential property.
 """
 
 # deduplication settings
