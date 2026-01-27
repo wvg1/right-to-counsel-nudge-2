@@ -1,11 +1,11 @@
 """
-PDF case number extraction script
-extracts case numbers and types from Pierce County daily filing PDFs
+Phase 1: PDF Case Number Extractor
+Extracts case numbers and types from Pierce County daily filing PDFs
 """
 
 import sys
 from pathlib import Path
-# add parent directory to path to import config
+# Add parent directory to path to import config
 sys.path.append(str(Path(__file__).parent.parent))
 
 import re
@@ -15,7 +15,7 @@ import time
 import pdfplumber
 from config import DAILY_PDFS_DIR, WEEKLY_CASES_CSV
 
-# set up logging
+# Set up logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -24,14 +24,14 @@ logger = logging.getLogger(__name__)
 
 
 class CaseExtractor:
-    """extracts unlawful detainer cases from daily filing PDFs"""
+    """Extracts unlawful detainer cases from daily filing PDFs"""
     
     def __init__(self, pdf_directory: Path = None):
         """
-        initialize the case extractor
+        Initialize the case extractor
         
-        args:
-            pdf_directory: path to directory containing daily PDF files (defaults to config)
+        Args:
+            pdf_directory: Path to directory containing daily PDF files (defaults to config)
         """
         self.pdf_directory = pdf_directory or DAILY_PDFS_DIR
         self.case_pattern = re.compile(r'\d{2}-\d-\d{5}-\d')
@@ -44,13 +44,13 @@ class CaseExtractor:
     
     def extract_cases_from_pdf(self, pdf_path: Path) -> List[Dict[str, str]]:
         """
-        extract all cases from a single PDF
+        Extract all cases from a single PDF
         
-        args:
+        Args:
             pdf_path: Path to PDF file
             
-        returns:
-            list of dictionaries with case_number, case_type, and filing_date
+        Returns:
+            List of dictionaries with case_number, case_type, and filing_date
         """
         cases = []
         
@@ -60,25 +60,25 @@ class CaseExtractor:
                 for page in pdf.pages:
                     text += page.extract_text() or ""
                 
-                # split by case number pattern
+                # Split by case number pattern
                 lines = text.split('\n')
                 current_case = None
                 
                 for i, line in enumerate(lines):
-                    # check if line contains a case number
+                    # Check if line contains a case number
                     case_match = self.case_pattern.search(line)
                     
                     if case_match:
                         case_number = case_match.group()
                         
-                        # extract filing date (should be on same line)
+                        # Extract filing date (should be on same line)
                         date_match = re.search(r'\d{2}/\d{2}/\d{4}', line)
                         filing_date = date_match.group() if date_match else None
                         
-                        # extract case type (typically on same line after date)
+                        # Extract case type (typically on same line after date)
                         case_type = line.split(filing_date)[-1].strip() if filing_date else ""
                         
-                        # if case type is empty, check next few lines
+                        # If case type is empty, check next few lines
                         if not case_type and i + 1 < len(lines):
                             case_type = lines[i + 1].strip()
                         
@@ -99,12 +99,12 @@ class CaseExtractor:
     
     def filter_eviction_cases(self, cases: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """
-        filter for unlawful detainer (eviction) cases
+        Filter for unlawful detainer (eviction) cases
         
-        args:
+        Args:
             cases: List of all cases
             
-        returns:
+        Returns:
             List of eviction cases only
         """
         eviction_keywords = ['unlawful detainer', 'detainer']
@@ -119,15 +119,15 @@ class CaseExtractor:
     
     def process_weekly_pdfs(self) -> List[Dict[str, str]]:
         """
-        process all PDFs in the directory and extract eviction cases
+        Process all PDFs in the directory and extract eviction cases
         
-        returns:
-            list of all eviction cases from the week
+        Returns:
+            List of all eviction cases from the week
         """
         start_time = time.time()
         all_cases = []
         
-        # get all PDF files
+        # Get all PDF files
         pdf_files = sorted(self.pdf_directory.glob('*.pdf'))
         
         if not pdf_files:
@@ -143,11 +143,11 @@ class CaseExtractor:
         
         self.metrics['total_cases_found'] = len(all_cases)
         
-        # filter for evictions
+        # Filter for evictions
         eviction_cases = self.filter_eviction_cases(all_cases)
         self.metrics['eviction_cases_found'] = len(eviction_cases)
         
-        # calculate processing time
+        # Calculate processing time
         self.metrics['processing_time'] = time.time() - start_time
         
         self._log_metrics()
@@ -172,13 +172,13 @@ class CaseExtractor:
 
 def main():
     """Example usage"""
-    # initialize extractor (uses config paths)
+    # Initialize extractor (uses config paths)
     extractor = CaseExtractor()
     
-    # process all PDFs from the week
+    # Process all PDFs from the week
     eviction_cases = extractor.process_weekly_pdfs()
     
-    # display results
+    # Display results
     print(f"\nFound {len(eviction_cases)} eviction cases:")
     for case in eviction_cases[:5]:  # Show first 5
         print(f"  {case['case_number']} - {case['case_type']} ({case['filing_date']})")
@@ -186,7 +186,7 @@ def main():
     if len(eviction_cases) > 5:
         print(f"  ... and {len(eviction_cases) - 5} more")
     
-    # save to CSV for next phase
+    # Save to CSV for next phase
     import pandas as pd
     df = pd.DataFrame(eviction_cases)
     df.to_csv(WEEKLY_CASES_CSV, index=False)
