@@ -9,6 +9,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 import logging
 import time
 import json
+import argparse
 from typing import Dict, List
 import pandas as pd
 from tqdm import tqdm
@@ -19,8 +20,7 @@ from azure.core.credentials import AzureKeyCredential
 from openai import AzureOpenAI
 
 from config import (
-    WEEKLY_CASES_CSV,
-    CASE_DOCUMENTS_DIR,
+    DATA_DIR,
     AZURE_CV_ENDPOINT,
     AZURE_CV_KEY,
     AZURE_OPENAI_ENDPOINT,
@@ -43,7 +43,16 @@ logger = logging.getLogger(__name__)
 class ResidentialClassifier:
     """classifies eviction cases as residential or commercial using ChatGPT-4o"""
     
-    def __init__(self):
+    def __init__(self, week_number: int):
+        self.week_number = week_number
+        self.week_dir = DATA_DIR / f"week_{week_number}"
+        self.case_documents_dir = self.week_dir / "case_documents"
+        self.weekly_cases_csv = self.week_dir / "weekly_cases.csv"
+        self.outputs_dir = self.week_dir / "outputs"
+        
+        # Create outputs directory
+        self.outputs_dir.mkdir(parents=True, exist_ok=True)
+        
         self.cv_client = None
         self.openai_client = None
         self.metrics = {
@@ -171,7 +180,7 @@ Classify this case and respond with ONLY a JSON object in this exact format:
     def process_case(self, case_number: str) -> Dict:
         """Process a single case: OCR + LLM classification"""
         try:
-            complaint_path = CASE_DOCUMENTS_DIR / case_number / "complaint.pdf"
+            complaint_path = self.case_documents_dir / case_number / "complaint.pdf"
             
             if not complaint_path.exists():
                 logger.warning(f"No complaint found for {case_number}")
@@ -207,12 +216,12 @@ Classify this case and respond with ONLY a JSON object in this exact format:
         
         try:
             # read case numbers
-            if not WEEKLY_CASES_CSV.exists():
-                logger.error(f"Case file not found: {WEEKLY_CASES_CSV}")
+            if not self.weekly_cases_csv.exists():
+                logger.error(f"Case file not found: {self.weekly_cases_csv}")
                 logger.error("Run Phase 1 (pdf_extractor.py) first!")
                 return
             
-            df = pd.read_csv(WEEKLY_CASES_CSV)
+            df = pd.read_csv(self.weekly_cases_csv)
             case_numbers = df['case_number'].astype(str).tolist()
             
             logger.info(f"Processing {len(case_numbers)} cases for classification")
@@ -247,13 +256,13 @@ Classify this case and respond with ONLY a JSON object in this exact format:
             final_df = df.merge(results_df, on='case_number', how='left')
             
             # save results
-            output_path = WEEKLY_CASES_CSV.parent / "classified_cases.csv"
+            output_path = self.outputs_dir / "classified_cases.csv"
             final_df.to_csv(output_path, index=False)
             logger.info(f"Saved classification results to {output_path}")
             
             # filter for residential only
             residential_df = final_df[final_df['classification'] == 'RESIDENTIAL']
-            residential_path = WEEKLY_CASES_CSV.parent / "residential_cases.csv"
+            residential_path = self.outputs_dir / "residential_cases.csv"
             residential_df.to_csv(residential_path, index=False)
             logger.info(f"Saved {len(residential_df)} residential cases to {residential_path}")
             
@@ -274,6 +283,7 @@ Classify this case and respond with ONLY a JSON object in this exact format:
         logger.info("=" * 60)
         logger.info("CLASSIFICATION COMPLETE")
         logger.info("=" * 60)
+        logger.info(f"Week Number: {self.week_number}")
         logger.info(f"Cases processed: {self.metrics['cases_processed']}")
         logger.info(f"Residential: {self.metrics['residential_count']}")
         logger.info(f"Commercial: {self.metrics['commercial_count']}")
@@ -285,7 +295,11 @@ Classify this case and respond with ONLY a JSON object in this exact format:
 
 def main():
     """Run the classifier"""
-    classifier = ResidentialClassifier()
+    parser = argparse.ArgumentParser(description='Classify eviction cases as residential/commercial')
+    parser.add_argument('week', type=int, help='Week number')
+    args = parser.parse_args()
+    
+    classifier = ResidentialClassifier(week_number=args.week)
     classifier.process_all_cases()
 
 

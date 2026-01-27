@@ -48,8 +48,8 @@ class EmailAgent:
     
     def __init__(self, week_number: int):
         self.week_number = week_number
+        self.pdf_dir = DATA_DIR / "daily_pdfs" / f"week_{week_number}"
         self.week_dir = DATA_DIR / f"week_{week_number}"
-        self.pdf_dir = self.week_dir / "daily_pdfs"
         self.pdf_dir.mkdir(parents=True, exist_ok=True)
         
         self.service = None

@@ -18,11 +18,11 @@ import os
 import time
 import glob
 import logging
+import argparse
 from bs4 import BeautifulSoup
 
 from config import (
-    WEEKLY_CASES_CSV,
-    CASE_DOCUMENTS_DIR,
+    DATA_DIR,
     LINX_PORTAL_URL,
     LINX_USERNAME,
     LINX_PASSWORD,
@@ -41,9 +41,17 @@ logger = logging.getLogger(__name__)
 class LinxScraper:
     """Scrapes case documents from Pierce County LINX portal"""
     
-    def __init__(self):
+    def __init__(self, week_number: int):
+        self.week_number = week_number
+        self.week_dir = DATA_DIR / f"week_{week_number}"
+        self.case_documents_dir = self.week_dir / "case_documents"
+        self.weekly_cases_csv = self.week_dir / "weekly_cases.csv"
+        
+        # Create directories
+        self.case_documents_dir.mkdir(parents=True, exist_ok=True)
+        
         self.driver = None
-        self.download_dir = str(CASE_DOCUMENTS_DIR.absolute())
+        self.download_dir = str(self.case_documents_dir.absolute())
         self.metrics = {
             'cases_processed': 0,
             'successful_downloads': 0,
@@ -161,7 +169,7 @@ class LinxScraper:
         """Extract summons and complaint documents from zip file"""
         try:
             # Create case folder
-            case_dir = CASE_DOCUMENTS_DIR / case_number
+            case_dir = self.case_documents_dir / case_number
             case_dir.mkdir(parents=True, exist_ok=True)
             
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -233,7 +241,7 @@ class LinxScraper:
         """Get list of cases already downloaded"""
         downloaded = set()
         try:
-            for case_dir in CASE_DOCUMENTS_DIR.iterdir():
+            for case_dir in self.case_documents_dir.iterdir():
                 if case_dir.is_dir():
                     # Check if we have at least summons or complaint
                     has_summons = (case_dir / "summons.pdf").exists()
@@ -251,12 +259,12 @@ class LinxScraper:
         
         try:
             # Read case numbers from Phase 1 output
-            if not WEEKLY_CASES_CSV.exists():
-                logger.error(f"Case file not found: {WEEKLY_CASES_CSV}")
+            if not self.weekly_cases_csv.exists():
+                logger.error(f"Case file not found: {self.weekly_cases_csv}")
                 logger.error("Run Phase 1 (pdf_extractor.py) first!")
                 return
             
-            df = pd.read_csv(WEEKLY_CASES_CSV)
+            df = pd.read_csv(self.weekly_cases_csv)
             case_numbers = df['case_number'].astype(str).tolist()
             
             logger.info(f"Found {len(case_numbers)} cases to process")
@@ -330,6 +338,7 @@ class LinxScraper:
         logger.info("=" * 60)
         logger.info("DOWNLOAD COMPLETE")
         logger.info("=" * 60)
+        logger.info(f"Week Number: {self.week_number}")
         logger.info(f"Cases processed: {self.metrics['cases_processed']}")
         logger.info(f"Successful: {self.metrics['successful_downloads']}")
         logger.info(f"Failed: {self.metrics['failed_downloads']}")
@@ -347,7 +356,11 @@ class LinxScraper:
 
 def main():
     """Run the scraper"""
-    scraper = LinxScraper()
+    parser = argparse.ArgumentParser(description='Download case documents from LINX portal')
+    parser.add_argument('--week', type=int, required=True, help='Week number')
+    args = parser.parse_args()
+    
+    scraper = LinxScraper(week_number=args.week)
     scraper.process_cases()
 
 

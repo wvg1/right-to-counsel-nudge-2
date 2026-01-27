@@ -12,8 +12,9 @@ import re
 import logging
 from typing import List, Dict
 import time
+import argparse
 import pdfplumber
-from config import DAILY_PDFS_DIR, WEEKLY_CASES_CSV
+from config import DATA_DIR
 
 # Set up logging
 logging.basicConfig(
@@ -26,14 +27,21 @@ logger = logging.getLogger(__name__)
 class CaseExtractor:
     """Extracts unlawful detainer cases from daily filing PDFs"""
     
-    def __init__(self, pdf_directory: Path = None):
+    def __init__(self, week_number: int):
         """
         Initialize the case extractor
         
         Args:
-            pdf_directory: Path to directory containing daily PDF files (defaults to config)
+            week_number: Week number for organizing data
         """
-        self.pdf_directory = pdf_directory or DAILY_PDFS_DIR
+        self.week_number = week_number
+        self.pdf_directory = DATA_DIR / "daily_pdfs" / f"week_{week_number}"
+        self.output_csv = DATA_DIR / f"week_{week_number}" / "weekly_cases.csv"
+        
+        # Create directories if they don't exist
+        self.pdf_directory.mkdir(parents=True, exist_ok=True)
+        self.output_csv.parent.mkdir(parents=True, exist_ok=True)
+        
         self.case_pattern = re.compile(r'\d{2}-\d-\d{5}-\d')
         self.metrics = {
             'pdfs_processed': 0,
@@ -127,8 +135,8 @@ class CaseExtractor:
         start_time = time.time()
         all_cases = []
         
-        # Get all PDF files
-        pdf_files = sorted(self.pdf_directory.glob('*.pdf'))
+        # Get all PDF files (recursively to handle subdirectories)
+        pdf_files = sorted(self.pdf_directory.glob('**/*.pdf'))
         
         if not pdf_files:
             logger.warning(f"No PDF files found in {self.pdf_directory}")
@@ -159,6 +167,7 @@ class CaseExtractor:
         logger.info("=" * 50)
         logger.info("PROCESSING METRICS")
         logger.info("=" * 50)
+        logger.info(f"Week Number: {self.week_number}")
         logger.info(f"PDFs Processed: {self.metrics['pdfs_processed']}")
         logger.info(f"Total Cases Found: {self.metrics['total_cases_found']}")
         logger.info(f"Eviction Cases Found: {self.metrics['eviction_cases_found']}")
@@ -168,12 +177,23 @@ class CaseExtractor:
     def get_metrics(self) -> Dict:
         """Return metrics for resume/reporting purposes"""
         return self.metrics
+    
+    def save_to_csv(self, eviction_cases: List[Dict[str, str]]):
+        """Save eviction cases to CSV"""
+        import pandas as pd
+        df = pd.DataFrame(eviction_cases)
+        df.to_csv(self.output_csv, index=False)
+        logger.info(f"Saved {len(eviction_cases)} cases to {self.output_csv}")
 
 
 def main():
-    """Example usage"""
-    # Initialize extractor (uses config paths)
-    extractor = CaseExtractor()
+    """Main entry point with argument parsing"""
+    parser = argparse.ArgumentParser(description='Extract eviction cases from daily filing PDFs')
+    parser.add_argument('--week', type=int, required=True, help='Week number')
+    args = parser.parse_args()
+    
+    # Initialize extractor with week number
+    extractor = CaseExtractor(week_number=args.week)
     
     # Process all PDFs from the week
     eviction_cases = extractor.process_weekly_pdfs()
@@ -187,10 +207,7 @@ def main():
         print(f"  ... and {len(eviction_cases) - 5} more")
     
     # Save to CSV for next phase
-    import pandas as pd
-    df = pd.DataFrame(eviction_cases)
-    df.to_csv(WEEKLY_CASES_CSV, index=False)
-    print(f"\nSaved to {WEEKLY_CASES_CSV}")
+    extractor.save_to_csv(eviction_cases)
     
     return eviction_cases
 
