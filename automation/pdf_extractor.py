@@ -5,7 +5,7 @@ Extracts case numbers and types from Pierce County daily filing PDFs
 
 import sys
 from pathlib import Path
-# Add parent directory to path to import config
+# add parent directory to path to import config
 sys.path.append(str(Path(__file__).parent.parent))
 
 import re
@@ -16,7 +16,7 @@ import argparse
 import pdfplumber
 from config import DATA_DIR
 
-# Set up logging
+# set up logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -38,7 +38,7 @@ class CaseExtractor:
         self.pdf_directory = DATA_DIR / "daily_pdfs" / f"week_{week_number}"
         self.output_csv = DATA_DIR / f"week_{week_number}" / "weekly_cases.csv"
         
-        # Create directories if they don't exist
+        # create directories if they don't exist
         self.pdf_directory.mkdir(parents=True, exist_ok=True)
         self.output_csv.parent.mkdir(parents=True, exist_ok=True)
         
@@ -68,25 +68,25 @@ class CaseExtractor:
                 for page in pdf.pages:
                     text += page.extract_text() or ""
                 
-                # Split by case number pattern
+                # split by case number pattern
                 lines = text.split('\n')
                 current_case = None
                 
                 for i, line in enumerate(lines):
-                    # Check if line contains a case number
+                    # check if line contains a case number
                     case_match = self.case_pattern.search(line)
                     
                     if case_match:
                         case_number = case_match.group()
                         
-                        # Extract filing date (should be on same line)
+                        # extract filing date (should be on same line)
                         date_match = re.search(r'\d{2}/\d{2}/\d{4}', line)
                         filing_date = date_match.group() if date_match else None
                         
-                        # Extract case type (typically on same line after date)
+                        # extract case type (typically on same line after date)
                         case_type = line.split(filing_date)[-1].strip() if filing_date else ""
                         
-                        # If case type is empty, check next few lines
+                        # if case type is empty, check next few lines
                         if not case_type and i + 1 < len(lines):
                             case_type = lines[i + 1].strip()
                         
@@ -135,7 +135,7 @@ class CaseExtractor:
         start_time = time.time()
         all_cases = []
         
-        # Get all PDF files (recursively to handle subdirectories)
+        # get all PDF files (recursively to handle subdirectories)
         pdf_files = sorted(self.pdf_directory.glob('**/*.pdf'))
         
         if not pdf_files:
@@ -151,11 +151,11 @@ class CaseExtractor:
         
         self.metrics['total_cases_found'] = len(all_cases)
         
-        # Filter for evictions
+        # filter for evictions
         eviction_cases = self.filter_eviction_cases(all_cases)
         self.metrics['eviction_cases_found'] = len(eviction_cases)
         
-        # Calculate processing time
+        # calculate processing time
         self.metrics['processing_time'] = time.time() - start_time
         
         self._log_metrics()
@@ -192,21 +192,21 @@ def main():
     parser.add_argument('--week', type=int, required=True, help='Week number')
     args = parser.parse_args()
     
-    # Initialize extractor with week number
+    # initialize extractor with week number
     extractor = CaseExtractor(week_number=args.week)
     
-    # Process all PDFs from the week
+    # process all PDFs from the week
     eviction_cases = extractor.process_weekly_pdfs()
     
-    # Display results
+    # display results
     print(f"\nFound {len(eviction_cases)} eviction cases:")
-    for case in eviction_cases[:5]:  # Show first 5
+    for case in eviction_cases[:5]:  # show first 5
         print(f"  {case['case_number']} - {case['case_type']} ({case['filing_date']})")
     
     if len(eviction_cases) > 5:
         print(f"  ... and {len(eviction_cases) - 5} more")
     
-    # Save to CSV for next phase
+    # save to CSV for next phase
     extractor.save_to_csv(eviction_cases)
     
     return eviction_cases
