@@ -25,27 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def get_recently_modified_file(directory, existing_zips=None):
-    # check no downloads still in progress
-    crdownload_files = glob.glob(os.path.join(directory, '*.crdownload'))
-    if crdownload_files:
-        return None  # still downloading
-
-    # find new zip files not in the pre-download snapshot
-    current_zips = set(glob.glob(os.path.join(directory, '*.zip')))
-    if existing_zips is not None:
-        new_zips = current_zips - existing_zips
-    else:
-        new_zips = current_zips
-
-    if not new_zips:
-        return None
-
-    return max(new_zips, key=os.path.getmtime)
-
-
 def label_file(old_path, new_path, number=1):
-    # rename file, handling duplicates by adding numbers
     try:
         os.rename(old_path, new_path)
     except OSError:
@@ -54,7 +34,6 @@ def label_file(old_path, new_path, number=1):
 
 
 def relabel_files(cause, case_folder):
-    # rename files based on HTML index
     try:
         html_path = os.path.join(case_folder, f'{cause}.htm')
 
@@ -65,7 +44,6 @@ def relabel_files(cause, case_folder):
         with open(html_path, 'r', encoding='utf-8', errors='ignore') as f:
             html_doc = f.read()
 
-        # parse HTML to get file mappings
         soup = BeautifulSoup(html_doc, 'html.parser')
 
         old_names = []
@@ -77,9 +55,8 @@ def relabel_files(cause, case_folder):
                 old_names.append(href)
                 for string in link.stripped_strings:
                     new_names.append(repr(string))
-                    break  # only take first string
+                    break
 
-        # clean new names for use as filenames
         new_names = [re.sub(r'^\W|\W$', '', x) for x in new_names]
         new_names = [re.sub(r'\W+', '_', x) for x in new_names]
         new_names = [x.lower() + '.pdf' for x in new_names]
@@ -106,7 +83,6 @@ def relabel_files(cause, case_folder):
 
 
 def get_downloaded_cases(output_dir):
-    # get list of cases that have already been downloaded
     downloaded = set()
     try:
         for year_dir in glob.glob(os.path.join(output_dir, '20*')):
@@ -116,16 +92,14 @@ def get_downloaded_cases(output_dir):
                     downloaded.add(case_name)
     except Exception as e:
         logger.warning(f"Error reading downloaded cases: {e}")
-
     return downloaded
 
 
-def start_driver(chromedriver_path=None):
-    # initialize Chrome WebDriver
+def start_driver(download_dir):
     try:
         chrome_options = Options()
         prefs = {
-            "download.default_directory": os.path.abspath(r'C:\Users\wvg1\Documents\eviction-data\data\doc_downloads'),
+            "download.default_directory": os.path.abspath(download_dir),
             "download.prompt_for_download": False,
             "safebrowsing.enabled": False
         }
@@ -140,25 +114,20 @@ def start_driver(chromedriver_path=None):
 
 
 def login(driver, username, password, base_url):
-    # log into the LINX portal
     try:
         driver.get(f"{base_url}/Account/Logon.cfm")
-
         driver.find_element(By.NAME, "account_num").send_keys(username)
         driver.find_element(By.NAME, "pin").send_keys(password)
         driver.find_element(By.CSS_SELECTOR, 'input[type="Submit"]').click()
-
         time.sleep(3)
         logger.info("Successfully logged in")
         return True
-
     except Exception as e:
         logger.error(f"Login failed: {e}")
         return False
 
 
 def read_case_numbers(excel_file):
-    # read case numbers from Excel file
     try:
         df = pd.read_excel(excel_file)
         if 'case numbers' in df.columns:
@@ -167,7 +136,6 @@ def read_case_numbers(excel_file):
             case_numbers = df['Case Number'].astype(str).tolist()
         else:
             case_numbers = df.iloc[:, 0].astype(str).tolist()
-
         logger.info(f"Read {len(case_numbers)} case numbers from Excel")
         return case_numbers
     except Exception as e:
@@ -176,7 +144,6 @@ def read_case_numbers(excel_file):
 
 
 def download_case_documents(driver, case_number, base_url, output_dir):
-    # download documents for a specific case
     try:
         # snapshot existing zips before triggering download
         existing_zips = set(glob.glob(os.path.join(output_dir, '*.zip')))
@@ -206,7 +173,7 @@ def download_case_documents(driver, case_number, base_url, output_dir):
             if new_zips and not crdownloads:
                 recent_file = max(new_zips, key=os.path.getmtime)
                 logger.info(f"Downloaded {case_number}: {recent_file}")
-                time.sleep(1)  # give file time to finish writing
+                time.sleep(1)
                 return True
 
             time.sleep(0.5)
@@ -221,7 +188,6 @@ def download_case_documents(driver, case_number, base_url, output_dir):
 
 
 def process_zip_files(output_dir):
-    # unzip files and organize by year/case number
     try:
         zip_files = glob.glob(os.path.join(output_dir, '*.zip'))
 
@@ -286,9 +252,13 @@ def main():
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     logger.info(f"Output directory: {output_dir}")
 
+    # process any leftover zips from a previous run before starting
+    logger.info("Processing any leftover zip files from previous run...")
+    process_zip_files(output_dir)
+
     driver = None
     try:
-        driver = start_driver()
+        driver = start_driver(output_dir)
 
         if not login(driver, username, password, base_url):
             logger.error("Failed to login")
@@ -326,7 +296,7 @@ def main():
                     driver.quit()
                 except:
                     pass
-                driver = start_driver()
+                driver = start_driver(output_dir)
                 if not login(driver, username, password, base_url):
                     logger.error("Failed to reconnect and login")
                     break
@@ -348,14 +318,11 @@ def main():
                     logger.info("Chrome closed")
                 except:
                     pass
-
                 time.sleep(3)
-                driver = start_driver()
-
+                driver = start_driver(output_dir)
                 if not login(driver, username, password, base_url):
                     logger.error("Failed to login after Chrome restart")
                     break
-
                 logger.info("Chrome restarted successfully")
                 logger.info(f"{'='*60}\n")
 
@@ -364,9 +331,7 @@ def main():
 
             time.sleep(5)
 
-        logger.info("\n{'='*60}")
         logger.info("Processing remaining zip files...")
-        logger.info(f"{'='*60}")
         process_zip_files(output_dir)
 
         logger.info(f"\n{'='*60}")
